@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # FastAPI Application
+  fraud-detection-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://fraud_user:fraud_password@postgres:5432/fraud_detection
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - postgres
+      - mlflow
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - fraud-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=fraud_detection
+      - POSTGRES_USER=fraud_user
+      - POSTGRES_PASSWORD=fraud_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fraud-network
+
+  # MLflow for Model Tracking
+  mlflow:
+    image: python:3.9-slim
+    command: >
+      bash -c "pip install mlflow psycopg2-binary &&
+               mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql://fraud_user:fraud_password@postgres:5432/fraud_detection"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+    networks:
+      - fraud-network
+
+  # Jupyter Notebook
+  jupyter:
+    build: .
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - DATABASE_URL=postgresql://fraud_user:fraud_password@postgres:5432/fraud_detection
+    depends_on:
+      - postgres
+    networks:
+      - fraud-network
+
+volumes:
+  postgres_data:
+
+networks:
+  fraud-network:
+    driver: bridge 
